@@ -21,7 +21,9 @@
       "output": "dist/installer"
     },
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "artifactName": "JARVIS Setup.${ext}"
     },
     "nsis": {
@@ -47,6 +49,7 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^34.2.0",
+    "electron-builder": "^26.15.3",
     "typescript": "^5.7.3",
     "vite": "^6.1.0"
   }
