@@ -249,3 +249,27 @@ ipcMain.handle('quit-app', async () => {
   isQuitting = true;
   app.quit();
 });
+
+ipcMain.handle('get-auto-start', async () => {
+  try {
+    const settings = app.getLoginItemSettings();
+    return settings.openAtLogin;
+  } catch {
+    return false;
+  }
+});
+
+ipcMain.handle('toggle-auto-start', async (_event, enable?: boolean) => {
+  try {
+    const current = app.getLoginItemSettings().openAtLogin;
+    const target = typeof enable === 'boolean' ? enable : !current;
+    app.setLoginItemSettings({
+      openAtLogin: target,
+      openAsHidden: true,
+    });
+    return target;
+  } catch {
+    return false;
+  }
+});
+

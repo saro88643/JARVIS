@@ -11,7 +11,26 @@
     "dev:vite": "vite",
     "dev:electron": "tsc -p tsconfig.electron.json --watch",
     "dev": "vite",
-    "start": "electron ."
+    "start": "electron .",
+    "package": "npm run build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.jarvis.desktop",
+    "productName": "JARVIS",
+    "directories": {
+      "output": "dist/installer"
+    },
+    "win": {
+      "target": ["nsis"],
+      "artifactName": "JARVIS Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "JARVIS"
+    }
   },
   "dependencies": {
     "@jarvis/security": "*",

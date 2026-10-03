@@ -14,6 +14,8 @@ declare global {
       getAgentStatus: () => Promise<boolean>;
       toggleAgentStatus: () => Promise<boolean>;
       quitApp: () => Promise<void>;
+      getAutoStart: () => Promise<boolean>;
+      toggleAutoStart: (enable?: boolean) => Promise<boolean>;
       onAgentStatusChange: (callback: (status: boolean) => void) => () => void;
     };
   }

@@ -20,6 +20,7 @@
     "build:backend": "npm run build --workspace=@jarvis/backend",
     "build:desktop": "npm run build --workspace=@jarvis/desktop",
     "build": "npm run build:shared && npm run build:security && npm run build:ai && npm run build:voice && npm run build:tools && npm run build:agent && npm run build:backend && npm run build:desktop",
+    "package": "npm run package --workspace=@jarvis/desktop",
     "test": "vitest run"
   },
   "devDependencies": {

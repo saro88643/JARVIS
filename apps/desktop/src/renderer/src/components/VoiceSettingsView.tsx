@@ -15,6 +15,8 @@ export const VoiceSettingsView: React.FC<VoiceSettingsViewProps> = ({ voiceManag
   const [testRunning, setTestRunning] = useState<boolean>(false);
   const [testStatus, setTestStatus] = useState<string>('');
 
+  const [autoStart, setAutoStart] = useState<boolean>(false);
+
   useEffect(() => {
     // Fetch audio devices and TTS voices
     voiceManager.getAvailableAudioDevices().then((res) => {
@@ -25,6 +27,10 @@ export const VoiceSettingsView: React.FC<VoiceSettingsViewProps> = ({ voiceManag
     const availVoices = voiceManager.getAvailableTTSVoices();
     setVoices(availVoices);
 
+    if (window.jarvisApi?.getAutoStart) {
+      window.jarvisApi.getAutoStart().then((status) => setAutoStart(status));
+    }
+
     // Watch for window speechSynthesis voices load
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.onvoiceschanged = () => {
@@ -32,6 +38,14 @@ export const VoiceSettingsView: React.FC<VoiceSettingsViewProps> = ({ voiceManag
       };
     }
   }, [voiceManager]);
+
+  const handleToggleAutoStart = async (enable: boolean) => {
+    setAutoStart(enable);
+    if (window.jarvisApi?.toggleAutoStart) {
+      const res = await window.jarvisApi.toggleAutoStart(enable);
+      setAutoStart(res);
+    }
+  };
 
   const handleChange = (key: keyof VoiceSettings, value: any) => {
     const updated = { [key]: value };
@@ -56,11 +70,53 @@ export const VoiceSettingsView: React.FC<VoiceSettingsViewProps> = ({ voiceManag
     <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '900px' }}>
       <div>
         <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#fff', marginBottom: '4px' }}>
-          Voice Engine Settings & Privacy
+          Voice Engine & Desktop Assistant Settings
         </h2>
         <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-          Configure speech-to-text, text-to-speech, microphone hardware, and privacy controls.
+          Configure speech recognition, text-to-speech, microphone hardware, Windows startup, and privacy controls.
         </p>
+      </div>
+
+      {/* Windows Startup Toggle */}
+      <div className="glass-panel" style={{ padding: '20px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#fff', marginBottom: '2px' }}>
+            Start JARVIS with Windows
+          </h3>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            Automatically start JARVIS in the background when your Windows PC starts.
+          </p>
+        </div>
+        <label style={{ position: 'relative', display: 'inline-block', width: '48px', height: '24px', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={autoStart}
+            onChange={(e) => handleToggleAutoStart(e.target.checked)}
+            style={{ opacity: 0, width: 0, height: 0 }}
+          />
+          <span
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: autoStart ? '#10b981' : 'rgba(255, 255, 255, 0.2)',
+              borderRadius: '24px',
+              transition: '0.3s',
+            }}
+          >
+            <span
+              style={{
+                position: 'absolute',
+                content: '""',
+                height: '18px', width: '18px',
+                left: autoStart ? '26px' : '3px',
+                bottom: '3px',
+                backgroundColor: '#fff',
+                borderRadius: '50%',
+                transition: '0.3s',
+              }}
+            />
+          </span>
+        </label>
       </div>
 
       {/* Voice Toggle */}
@@ -104,6 +160,7 @@ export const VoiceSettingsView: React.FC<VoiceSettingsViewProps> = ({ voiceManag
           </span>
         </label>
       </div>
+
 
       {/* Hardware Configuration */}
       <div className="glass-panel" style={{ padding: '24px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '20px' }}>

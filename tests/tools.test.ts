@@ -18,7 +18,42 @@ describe('ToolRegistry & Tools Execution', () => {
     expect(toolNames).toContain('search_files');
     expect(toolNames).toContain('run_command');
     expect(toolNames).toContain('git_status');
+    expect(toolNames).toContain('open_application');
+    expect(toolNames).toContain('open_folder');
+    expect(toolNames).toContain('open_url');
   });
+
+  it('validates open_folder inside workspace safely (Level 0)', async () => {
+    const result = await toolRegistry.executeTool(
+      'open_folder',
+      { folderPath: 'C:\\JARVIS' },
+      { workspaceRoot: 'C:\\JARVIS', securityManager }
+    );
+
+    expect(result.level).toBe(PermissionLevel.LEVEL_0_SAFE_READ);
+  });
+
+  it('blocks open_folder outside approved workspace boundary', async () => {
+    const result = await toolRegistry.executeTool(
+      'open_folder',
+      { folderPath: 'C:\\Windows\\System32' },
+      { workspaceRoot: 'C:\\JARVIS', securityManager }
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.level).toBe(PermissionLevel.LEVEL_3_BLOCKED);
+  });
+
+  it('validates open_url query parameters safely', async () => {
+    const result = await toolRegistry.executeTool(
+      'open_url',
+      { url: 'https://youtube.com' },
+      { workspaceRoot: 'C:\\JARVIS', securityManager }
+    );
+
+    expect(result.level).toBe(PermissionLevel.LEVEL_0_SAFE_READ);
+  });
+
 
   it('executes list_directory within workspace safely (Level 0)', async () => {
     const result = await toolRegistry.executeTool(

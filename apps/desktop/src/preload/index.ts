@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('jarvisApi', {
   getAgentStatus: () => ipcRenderer.invoke('get-agent-status'),
   toggleAgentStatus: () => ipcRenderer.invoke('toggle-agent-status'),
   quitApp: () => ipcRenderer.invoke('quit-app'),
+  getAutoStart: () => ipcRenderer.invoke('get-auto-start'),
+  toggleAutoStart: (enable?: boolean) => ipcRenderer.invoke('toggle-auto-start', enable),
   onAgentStatusChange: (callback: (status: boolean) => void) => {
     const listener = (_event: any, status: boolean) => callback(status);
     ipcRenderer.on('agent-status-changed', listener);

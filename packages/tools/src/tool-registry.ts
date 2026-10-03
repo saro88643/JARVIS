@@ -7,6 +7,9 @@ import { listDirectoryTool } from './tools/list-directory-tool.js';
 import { searchFilesTool } from './tools/search-files-tool.js';
 import { runCommandTool } from './tools/run-command-tool.js';
 import { gitStatusTool } from './tools/git-status-tool.js';
+import { openApplicationTool } from './tools/open-application-tool.js';
+import { openFolderTool } from './tools/open-folder-tool.js';
+import { openUrlTool } from './tools/open-url-tool.js';
 
 export class ToolRegistry {
   private tools: Map<string, ToolDefinition> = new Map();
@@ -18,6 +21,9 @@ export class ToolRegistry {
     this.registerTool(searchFilesTool);
     this.registerTool(runCommandTool);
     this.registerTool(gitStatusTool);
+    this.registerTool(openApplicationTool);
+    this.registerTool(openFolderTool);
+    this.registerTool(openUrlTool);
   }
 
   public registerTool(tool: ToolDefinition): void {
