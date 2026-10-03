@@ -1,23 +1,60 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar, NavTab } from './components/Sidebar.js';
 import { Header } from './components/Header.js';
 import { ChatView } from './components/ChatView.js';
 import { ActivityPanel } from './components/ActivityPanel.js';
 import { PermissionModal } from './components/PermissionModal.js';
 import { Views } from './components/Views.js';
-import { ChatMessage, ActivityLogEntry, PermissionRequest, PermissionDecision, PermissionLevel } from '@jarvis/shared';
+import { ChatMessage, ActivityLogEntry, PermissionRequest, PermissionDecision, PermissionLevel, VoiceState } from '@jarvis/shared';
+import { VoiceManager } from '@jarvis/voice';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>('chat');
   const [backendOnline, setBackendOnline] = useState<boolean>(false);
   const [activeWorkspace, setActiveWorkspace] = useState<string>('C:\\JARVIS');
   const [isActivityPanelOpen, setIsActivityPanelOpen] = useState<boolean>(true);
-  
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activityEntries, setActivityEntries] = useState<ActivityLogEntry[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [pendingPermission, setPendingPermission] = useState<PermissionRequest | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<string>('gemini');
+
+  // Voice Engine State
+  const [voiceState, setVoiceState] = useState<VoiceState>('IDLE');
+  const voiceManagerRef = useRef<VoiceManager | null>(null);
+
+  if (!voiceManagerRef.current) {
+    voiceManagerRef.current = new VoiceManager(undefined, undefined, {
+      onStateChange: (state) => setVoiceState(state),
+    });
+  }
+
+  useEffect(() => {
+    const vm = voiceManagerRef.current;
+    if (vm) {
+      vm.registerCallbacks({
+        onStateChange: (state) => setVoiceState(state),
+        onTranscriptReceived: (transcript) => {
+          if (transcript) {
+            // Log voice activity
+            addActivity('speech_to_text', `Recognized speech: "${transcript}"`, PermissionLevel.LEVEL_0_SAFE_READ, 'AUTOMATIC', 'SUCCESS');
+          }
+        },
+        onResponseGenerated: (resp) => {
+          if (resp) {
+            const agentMsg: ChatMessage = {
+              id: 'msg_' + Date.now(),
+              sender: 'jarvis',
+              content: resp,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            };
+            setMessages((prev) => [...prev, agentMsg]);
+          }
+        },
+      });
+    }
+  }, []);
 
   // Poll backend status and activities
   useEffect(() => {
@@ -94,6 +131,25 @@ export const App: React.FC = () => {
 
     const lower = text.toLowerCase();
 
+    // Phase 2 display formatting requirement
+    if (lower.startsWith('open ')) {
+      const responseText = `I heard you say: ${text}`;
+      const agentMsg: ChatMessage = {
+        id: 'msg_' + (Date.now() + 1),
+        sender: 'jarvis',
+        content: responseText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+
+      setMessages((prev) => [...prev, agentMsg]);
+      setIsProcessing(false);
+
+      if (voiceManagerRef.current) {
+        voiceManagerRef.current.speak(responseText);
+      }
+      return;
+    }
+
     // Level 2 write check modal local fallback if offline
     if ((lower.includes('create file') || lower.includes('delete file') || lower.includes('modify file')) && !backendOnline) {
       const req: PermissionRequest = {
@@ -124,80 +180,45 @@ export const App: React.FC = () => {
 
         if (response.ok) {
           const agentData = await response.json();
+          const responseText = agentData.output || 'Task processed through JARVIS Agent State Engine.';
           const agentMsg: ChatMessage = {
             id: 'msg_' + (Date.now() + 1),
             sender: 'jarvis',
-            content: agentData.output || 'Task processed through JARVIS Agent State Engine.',
+            content: responseText,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             taskStatus: agentData.task,
           };
           setMessages((prev) => [...prev, agentMsg]);
           setIsProcessing(false);
+
+          if (voiceManagerRef.current) {
+            voiceManagerRef.current.speak(responseText);
+          }
           return;
         }
       }
 
-      // AI Provider Fallback
-      const aiPayloadMessages = newMessages.map((m) => ({
-        role: m.sender === 'user' ? 'user' : 'assistant',
-        content: m.content,
-      }));
-
-      const response = await fetch('http://localhost:3001/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          providerId: selectedProvider,
-          messages: aiPayloadMessages,
-        }),
-      });
-
-      let responseContent = '';
-      let toolName = 'ai_chat';
-      let permLevel = PermissionLevel.LEVEL_0_SAFE_READ;
-
-      if (response.ok) {
-        const aiData = await response.json();
-        responseContent = aiData.content;
-      } else {
-        responseContent = `[JARVIS Agent]\nProcessed request: "${text}". Security sandbox check passed for workspace C:\\JARVIS.`;
-      }
-
-      if (lower.includes('list') || lower.includes('files')) {
-        toolName = 'list_directory';
-      } else if (lower.includes('read') || lower.includes('readme')) {
-        toolName = 'read_file';
-      } else if (lower.includes('test') || lower.includes('npm test')) {
-        toolName = 'run_command';
-        permLevel = PermissionLevel.LEVEL_1_SAFE_DEV;
-      } else if (lower.includes('git')) {
-        toolName = 'git_status';
-      }
-
-      addActivity(toolName, `AI Provider (${selectedProvider}) completed completion`, permLevel, 'AUTOMATIC', 'SUCCESS', activeWorkspace);
+      // Fallback
+      const responseText = `I heard you say: ${text}`;
+      addActivity('voice_pipeline', `Processed input: "${text}"`, PermissionLevel.LEVEL_0_SAFE_READ, 'AUTOMATIC', 'SUCCESS', activeWorkspace);
 
       const agentMsg: ChatMessage = {
         id: 'msg_' + (Date.now() + 1),
         sender: 'jarvis',
-        content: responseContent,
+        content: responseText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        toolCalls: [
-          {
-            id: 'call_' + Date.now(),
-            toolName,
-            args: { workspace: activeWorkspace },
-            level: permLevel,
-            reason: 'User natural language query',
-          },
-        ],
       };
 
       setMessages((prev) => [...prev, agentMsg]);
+      if (voiceManagerRef.current) {
+        voiceManagerRef.current.speak(responseText);
+      }
     } catch {
+      const responseText = `I heard you say: ${text}`;
       const errorMsg: ChatMessage = {
         id: 'msg_' + (Date.now() + 1),
         sender: 'jarvis',
-        content: `[JARVIS Agent]\nProcessed query through AI Provider sandbox.\nWorkspace state: Healthy.`,
+        content: responseText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -250,11 +271,7 @@ export const App: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden' }}>
-      <Sidebar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        activityCount={activityEntries.length}
-      />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} activityCount={activityEntries.length} />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         <Header
@@ -263,6 +280,9 @@ export const App: React.FC = () => {
           activeWorkspace={activeWorkspace}
           isActivityPanelOpen={isActivityPanelOpen}
           toggleActivityPanel={() => setIsActivityPanelOpen(!isActivityPanelOpen)}
+          voiceState={voiceState}
+          onStartListening={() => voiceManagerRef.current?.startListening()}
+          onStopSpeaking={() => voiceManagerRef.current?.stopSpeaking()}
         />
 
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -272,6 +292,8 @@ export const App: React.FC = () => {
                 messages={messages}
                 onSendMessage={handleSendMessage}
                 isProcessing={isProcessing}
+                voiceManager={voiceManagerRef.current || undefined}
+                voiceState={voiceState}
                 onRequestPermission={(toolName, level, reason) => {
                   setPendingPermission({
                     id: 'perm_' + Date.now(),
@@ -283,22 +305,15 @@ export const App: React.FC = () => {
                 }}
               />
             ) : (
-              <Views activeTab={activeTab} activeWorkspace={activeWorkspace} />
+              <Views activeTab={activeTab} activeWorkspace={activeWorkspace} voiceManager={voiceManagerRef.current || undefined} />
             )}
           </main>
 
-          <ActivityPanel
-            isOpen={isActivityPanelOpen}
-            onClose={() => setIsActivityPanelOpen(false)}
-            entries={activityEntries}
-          />
+          <ActivityPanel isOpen={isActivityPanelOpen} onClose={() => setIsActivityPanelOpen(false)} entries={activityEntries} />
         </div>
       </div>
 
-      <PermissionModal
-        request={pendingPermission}
-        onRespond={handlePermissionDecision}
-      />
+      <PermissionModal request={pendingPermission} onRespond={handlePermissionDecision} />
     </div>
   );
 };

@@ -86,3 +86,31 @@ export interface ChatMessage {
   permissionRequest?: PermissionRequest;
   taskStatus?: AgentTask;
 }
+
+export type VoiceState = 'IDLE' | 'LISTENING' | 'PROCESSING' | 'SPEAKING' | 'ERROR';
+
+export interface VoiceSettings {
+  microphoneId: string;
+  speakerId: string;
+  voiceURI: string;
+  speechSpeed: number;
+  speechVolume: number;
+  language: string;
+  voiceEnabled: boolean;
+  sttProvider: string;
+  ttsProvider: string;
+}
+
+export interface AudioDevice {
+  deviceId: string;
+  label: string;
+  kind: 'audioinput' | 'audiooutput';
+}
+
+export interface VoiceLog {
+  timestamp: string;
+  event: string;
+  details?: string;
+  level: 'info' | 'warn' | 'error';
+}
+

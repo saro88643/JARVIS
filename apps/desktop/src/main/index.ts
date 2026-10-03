@@ -1,10 +1,126 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let mainWindow: BrowserWindow | null = null;
+let floatingWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let isAgentRunning = true;
+let isQuitting = false;
+
+function createTrayIcon(): ReturnType<typeof nativeImage.createFromDataURL> {
+  // 16x16 PNG icon cyan orb base64 data URI
+  const base64Icon =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAZSURBVDhPY3w54wUDFmBCMGoAQv0wMAAAM2kDNf32H5EAAAAASUVORK5CYII=';
+  return nativeImage.createFromDataURL(base64Icon);
+}
+
+function notifyAgentStatusChange() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('agent-status-changed', isAgentRunning);
+  }
+  if (floatingWindow && !floatingWindow.isDestroyed()) {
+    floatingWindow.webContents.send('agent-status-changed', isAgentRunning);
+  }
+}
+
+function updateTrayContextMenu() {
+  if (!tray) return;
+
+  const isMainVisible = mainWindow !== null && mainWindow.isVisible();
+  const isFloatingVisible = floatingWindow !== null && floatingWindow.isVisible();
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'JARVIS Personal AI Desktop',
+      enabled: false,
+    },
+    { type: 'separator' },
+    {
+      label: isMainVisible ? 'Hide Studio Window' : 'Show Studio Window',
+      click: () => {
+        toggleMainWindow();
+      },
+    },
+    {
+      label: isFloatingVisible ? 'Hide Voice Indicator' : 'Show Voice Indicator',
+      click: () => {
+        toggleFloatingWindow();
+      },
+    },
+    { type: 'separator' },
+    {
+      label: `Agent Status: ${isAgentRunning ? 'Running' : 'Suspended'}`,
+      click: () => {
+        toggleAgentStatus();
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Exit JARVIS',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+}
+
+function setupTray() {
+  const icon = createTrayIcon();
+  tray = new Tray(icon);
+  tray.setToolTip('JARVIS - Personal AI Desktop Assistant');
+
+  tray.on('click', () => {
+    toggleMainWindow();
+  });
+
+  updateTrayContextMenu();
+}
+
+function toggleMainWindow(): boolean {
+  if (!mainWindow) {
+    createWindow();
+    return true;
+  }
+  if (mainWindow.isVisible()) {
+    mainWindow.hide();
+    updateTrayContextMenu();
+    return false;
+  } else {
+    mainWindow.show();
+    mainWindow.focus();
+    updateTrayContextMenu();
+    return true;
+  }
+}
+
+function toggleFloatingWindow(): boolean {
+  if (!floatingWindow) {
+    createFloatingWindow();
+    return true;
+  }
+  if (floatingWindow.isVisible()) {
+    floatingWindow.hide();
+    updateTrayContextMenu();
+    return false;
+  } else {
+    floatingWindow.show();
+    updateTrayContextMenu();
+    return true;
+  }
+}
+
+function toggleAgentStatus(): boolean {
+  isAgentRunning = !isAgentRunning;
+  notifyAgentStatusChange();
+  updateTrayContextMenu();
+  return isAgentRunning;
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -26,28 +142,84 @@ function createWindow() {
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
 
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow?.hide();
+      updateTrayContextMenu();
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
+    updateTrayContextMenu();
+  });
+}
+
+function createFloatingWindow() {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width: workWidth, height: workHeight } = primaryDisplay.workAreaSize;
+
+  floatingWindow = new BrowserWindow({
+    width: 260,
+    height: 70,
+    x: workWidth - 280,
+    y: workHeight - 90,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    skipTaskbar: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+
+  if (isDev) {
+    floatingWindow.loadURL('http://localhost:5173/?mode=floating');
+  } else {
+    floatingWindow.loadFile(path.join(__dirname, '../renderer/index.html'), {
+      search: '?mode=floating',
+    });
+  }
+
+  floatingWindow.on('closed', () => {
+    floatingWindow = null;
+    updateTrayContextMenu();
   });
 }
 
 app.whenReady().then(() => {
+  setupTray();
   createWindow();
+  createFloatingWindow();
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (!mainWindow) createWindow();
+    else mainWindow.show();
   });
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+app.on('before-quit', () => {
+  isQuitting = true;
 });
 
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin' && isQuitting) {
+    app.quit();
+  }
+});
+
+// IPC Handler Registrations
 ipcMain.handle('get-system-info', async () => {
   return {
     platform: process.platform,
@@ -55,4 +227,25 @@ ipcMain.handle('get-system-info', async () => {
     electronVersion: process.versions.electron,
     nodeVersion: process.versions.node,
   };
+});
+
+ipcMain.handle('toggle-main-window', async () => {
+  return toggleMainWindow();
+});
+
+ipcMain.handle('toggle-floating-window', async () => {
+  return toggleFloatingWindow();
+});
+
+ipcMain.handle('get-agent-status', async () => {
+  return isAgentRunning;
+});
+
+ipcMain.handle('toggle-agent-status', async () => {
+  return toggleAgentStatus();
+});
+
+ipcMain.handle('quit-app', async () => {
+  isQuitting = true;
+  app.quit();
 });

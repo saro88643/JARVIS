@@ -68,5 +68,26 @@ export function createAgentRouter(agentEngine: AgentEngine): Router {
     });
   });
 
+  let isAgentRunning = true;
+
+  router.get('/status', (_req, res) => {
+    res.json({
+      running: isAgentRunning,
+      workspace: 'C:\\JARVIS',
+    });
+  });
+
+  router.post('/status/toggle', (req, res) => {
+    const { running } = req.body;
+    if (typeof running === 'boolean') {
+      isAgentRunning = running;
+    } else {
+      isAgentRunning = !isAgentRunning;
+    }
+    logger.info(`Agent state toggled to: ${isAgentRunning ? 'RUNNING' : 'STOPPED'}`);
+    res.json({ success: true, running: isAgentRunning });
+  });
+
   return router;
 }
+

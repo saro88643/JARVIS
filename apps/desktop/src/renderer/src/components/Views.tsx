@@ -16,12 +16,16 @@ import {
 import { NavTab } from './Sidebar.js';
 import { AgentTask } from '@jarvis/shared';
 
+import { VoiceSettingsView } from './VoiceSettingsView.js';
+import { VoiceManager } from '@jarvis/voice';
+
 interface ViewsProps {
   activeTab: NavTab;
   activeWorkspace: string;
+  voiceManager?: VoiceManager;
 }
 
-export const Views: React.FC<ViewsProps> = ({ activeTab, activeWorkspace }) => {
+export const Views: React.FC<ViewsProps> = ({ activeTab, activeWorkspace, voiceManager }) => {
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [tools, setTools] = useState<any[]>([]);
 
@@ -255,31 +259,14 @@ export const Views: React.FC<ViewsProps> = ({ activeTab, activeWorkspace }) => {
       );
 
     case 'settings':
-      return (
-        <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#fff' }}>JARVIS Agent Settings</h2>
-          <div className="glass-panel" style={{ padding: '24px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
-                AI Provider Interface
-              </label>
-              <select style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'var(--bg-main)', border: '1px solid var(--border-color)', color: '#fff' }}>
-                <option>Google Gemini Provider (gemini-2.5-flash)</option>
-                <option>OpenAI Provider (gpt-4o)</option>
-                <option>Local / Ollama Provider (llama3)</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
-                Approved Workspace Root
-              </label>
-              <input type="text" readOnly value={activeWorkspace} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'var(--bg-main)', border: '1px solid var(--border-color)', color: '#fff' }} className="mono" />
-            </div>
-          </div>
-        </div>
+      return voiceManager ? (
+        <VoiceSettingsView voiceManager={voiceManager} />
+      ) : (
+        <div style={{ padding: '32px', color: '#fff' }}>Voice Manager initializing...</div>
       );
 
     default:
       return null;
   }
 };
+
