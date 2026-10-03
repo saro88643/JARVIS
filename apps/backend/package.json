@@ -10,6 +10,7 @@
     "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
+    "@jarvis/ai": "*",
     "@jarvis/security": "*",
     "@jarvis/shared": "*",
     "cors": "^2.8.5",
