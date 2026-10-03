@@ -19,7 +19,7 @@ export const App: React.FC = () => {
   const [pendingPermission, setPendingPermission] = useState<PermissionRequest | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<string>('gemini');
 
-  // Poll backend status
+  // Poll backend status and activities
   useEffect(() => {
     const checkBackend = async () => {
       try {
@@ -28,6 +28,24 @@ export const App: React.FC = () => {
           const data = await res.json();
           setBackendOnline(true);
           if (data.approvedWorkspace) setActiveWorkspace(data.approvedWorkspace);
+
+          // Sync backend activity logs
+          const actRes = await fetch('http://localhost:3001/api/agent/activity');
+          if (actRes.ok) {
+            const actData = await actRes.json();
+            if (actData.activities && actData.activities.length > 0) {
+              setActivityEntries(actData.activities);
+            }
+          }
+
+          // Check pending permissions from agent
+          const permRes = await fetch('http://localhost:3001/api/agent/permissions');
+          if (permRes.ok) {
+            const permData = await permRes.json();
+            if (permData.pending && permData.pending.length > 0) {
+              setPendingPermission(permData.pending[0]);
+            }
+          }
         } else {
           setBackendOnline(false);
         }
@@ -37,7 +55,7 @@ export const App: React.FC = () => {
     };
 
     checkBackend();
-    const interval = setInterval(checkBackend, 5000);
+    const interval = setInterval(checkBackend, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -76,8 +94,8 @@ export const App: React.FC = () => {
 
     const lower = text.toLowerCase();
 
-    // Check level 2 write permissions requirement
-    if (lower.includes('create file') || lower.includes('delete file') || lower.includes('modify file')) {
+    // Level 2 write check modal local fallback if offline
+    if ((lower.includes('create file') || lower.includes('delete file') || lower.includes('modify file')) && !backendOnline) {
       const req: PermissionRequest = {
         id: 'perm_' + Date.now(),
         toolName: lower.includes('create') ? 'create_file' : lower.includes('delete') ? 'delete_file' : 'write_file',
@@ -93,7 +111,33 @@ export const App: React.FC = () => {
     }
 
     try {
-      // Call AI Chat Backend Service
+      if (backendOnline) {
+        // Submit task to Agent State Engine
+        const response = await fetch('http://localhost:3001/api/agent/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userPrompt: text,
+            providerId: selectedProvider,
+          }),
+        });
+
+        if (response.ok) {
+          const agentData = await response.json();
+          const agentMsg: ChatMessage = {
+            id: 'msg_' + (Date.now() + 1),
+            sender: 'jarvis',
+            content: agentData.output || 'Task processed through JARVIS Agent State Engine.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            taskStatus: agentData.task,
+          };
+          setMessages((prev) => [...prev, agentMsg]);
+          setIsProcessing(false);
+          return;
+        }
+      }
+
+      // AI Provider Fallback
       const aiPayloadMessages = newMessages.map((m) => ({
         role: m.sender === 'user' ? 'user' : 'assistant',
         content: m.content,
@@ -149,7 +193,7 @@ export const App: React.FC = () => {
       };
 
       setMessages((prev) => [...prev, agentMsg]);
-    } catch (err: any) {
+    } catch {
       const errorMsg: ChatMessage = {
         id: 'msg_' + (Date.now() + 1),
         sender: 'jarvis',
@@ -162,11 +206,26 @@ export const App: React.FC = () => {
     }
   };
 
-  const handlePermissionDecision = (decision: PermissionDecision) => {
+  const handlePermissionDecision = async (decision: PermissionDecision) => {
     if (!pendingPermission) return;
 
     const req = pendingPermission;
     setPendingPermission(null);
+
+    if (backendOnline) {
+      try {
+        await fetch('http://localhost:3001/api/agent/permission', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            requestId: req.id,
+            decision,
+          }),
+        });
+      } catch {
+        // fallback
+      }
+    }
 
     if (decision === 'DENY') {
       addActivity(req.toolName, `User denied ${req.toolName}`, req.level, 'DENIED', 'FAILED', req.targetPath);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FolderGit2, 
   ListTodo, 
@@ -9,11 +9,12 @@ import {
   Settings,
   Plus,
   CheckCircle2,
-  HardDrive,
-  FileCode2,
-  Lock
+  AlertCircle,
+  Clock,
+  Play
 } from 'lucide-react';
 import { NavTab } from './Sidebar.js';
+import { AgentTask } from '@jarvis/shared';
 
 interface ViewsProps {
   activeTab: NavTab;
@@ -21,6 +22,27 @@ interface ViewsProps {
 }
 
 export const Views: React.FC<ViewsProps> = ({ activeTab, activeWorkspace }) => {
+  const [tasks, setTasks] = useState<AgentTask[]>([]);
+  const [tools, setTools] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (activeTab === 'tasks') {
+      fetch('http://localhost:3001/api/agent/tasks')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.tasks) setTasks(data.tasks);
+        })
+        .catch(() => {});
+    } else if (activeTab === 'tools') {
+      fetch('http://localhost:3001/api/tools')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.tools) setTools(data.tools);
+        })
+        .catch(() => {});
+    }
+  }, [activeTab]);
+
   switch (activeTab) {
     case 'projects':
       return (
@@ -73,10 +95,61 @@ export const Views: React.FC<ViewsProps> = ({ activeTab, activeWorkspace }) => {
           <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
             Active agent executions, steps, and observation logs.
           </p>
-          <div className="glass-panel" style={{ padding: '32px', borderRadius: '12px', textAlign: 'center', color: 'var(--text-dim)' }}>
-            <ListTodo size={36} style={{ margin: '0 auto 12px', color: 'var(--accent-cyan)' }} />
-            <p>No agent tasks currently in progress.</p>
-          </div>
+
+          {tasks.length === 0 ? (
+            <div className="glass-panel" style={{ padding: '32px', borderRadius: '12px', textAlign: 'center', color: 'var(--text-dim)' }}>
+              <ListTodo size={36} style={{ margin: '0 auto 12px', color: 'var(--accent-cyan)' }} />
+              <p>No agent tasks currently recorded. Run a query in Chat to launch an agent task.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {tasks.map((task) => (
+                <div key={task.id} className="glass-panel" style={{ padding: '20px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span className="mono" style={{ fontSize: '14px', fontWeight: 700, color: 'var(--accent-cyan)' }}>{task.id}</span>
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        padding: '2px 8px',
+                        borderRadius: '10px',
+                        background: task.status === 'COMPLETED' ? 'rgba(16, 185, 129, 0.2)' : task.status === 'DENIED' || task.status === 'FAILED' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                        color: task.status === 'COMPLETED' ? '#6ee7b7' : task.status === 'DENIED' || task.status === 'FAILED' ? '#fca5a5' : '#93c5fd'
+                      }}>
+                        {task.status}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
+                      {new Date(task.createdAt).toLocaleTimeString()}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#fff' }}>
+                    Prompt: "{task.userPrompt}"
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '8px', borderTop: '1px solid var(--border-color)' }}>
+                    {task.steps.map((step, idx) => (
+                      <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px' }}>
+                        {step.status === 'DONE' ? (
+                          <CheckCircle2 size={14} color="#10b981" />
+                        ) : step.status === 'FAILED' ? (
+                          <AlertCircle size={14} color="#ef4444" />
+                        ) : step.status === 'IN_PROGRESS' ? (
+                          <Play size={14} color="#3b82f6" />
+                        ) : (
+                          <Clock size={14} color="var(--text-dim)" />
+                        )}
+                        <span style={{ color: step.status === 'IN_PROGRESS' ? '#fff' : 'var(--text-muted)' }}>
+                          Step {idx + 1}: {step.description}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       );
 
@@ -110,7 +183,7 @@ export const Views: React.FC<ViewsProps> = ({ activeTab, activeWorkspace }) => {
             Semantic index of project files excluding secrets, node_modules, and binary assets.
           </p>
           <div className="glass-panel" style={{ padding: '24px', borderRadius: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyBetween: 'space-between', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Database size={20} color="var(--accent-cyan)" />
                 <span style={{ fontSize: '15px', fontWeight: 600, color: '#fff' }}>Local Vector DB</span>
@@ -127,6 +200,15 @@ export const Views: React.FC<ViewsProps> = ({ activeTab, activeWorkspace }) => {
       );
 
     case 'tools':
+      const displayTools = tools.length > 0 ? tools : [
+        { name: 'read_file', level: 0, description: 'Reads contents of approved workspace files' },
+        { name: 'write_file', level: 2, description: 'Creates or updates approved project files (Requires Confirmation)' },
+        { name: 'list_directory', level: 0, description: 'Lists files and folders inside approved directories' },
+        { name: 'search_files', level: 0, description: 'Performs text search across project files' },
+        { name: 'run_command', level: 1, description: 'Executes validated shell commands' },
+        { name: 'git_status', level: 0, description: 'Inspects Git status and uncommitted changes' }
+      ];
+
       return (
         <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#fff' }}>Registered Tool Registry</h2>
@@ -134,23 +216,15 @@ export const Views: React.FC<ViewsProps> = ({ activeTab, activeWorkspace }) => {
             Every tool is validated by the Security Sandwich before execution.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px' }}>
-            {[
-              { name: 'read_file', level: 'Level 0 (Safe Read)', desc: 'Reads contents of approved workspace files' },
-              { name: 'list_directory', level: 'Level 0 (Safe Read)', desc: 'Lists files and folders inside approved directories' },
-              { name: 'search_files', level: 'Level 0 (Safe Read)', desc: 'Performs text/regex search across project files' },
-              { name: 'run_command', level: 'Level 1-2 (Dev/Prompt)', desc: 'Executes validated shell commands with timeout' },
-              { name: 'write_file', level: 'Level 2 (Confirmation)', desc: 'Creates or updates approved project files' },
-              { name: 'git_status', level: 'Level 0 (Safe Read)', desc: 'Inspects Git status and uncommitted changes' },
-              { name: 'git_commit', level: 'Level 2 (Confirmation)', desc: 'Commits staged project changes with message' },
-            ].map((tool, idx) => (
+            {displayTools.map((tool, idx) => (
               <div key={idx} className="glass-panel" style={{ padding: '16px', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span className="mono" style={{ fontSize: '14px', fontWeight: 600, color: 'var(--accent-cyan)' }}>{tool.name}</span>
-                  <span style={{ fontSize: '10px', background: 'rgba(255, 255, 255, 0.1)', padding: '2px 6px', borderRadius: '4px', color: '#fff' }}>
-                    {tool.level}
+                  <span style={{ fontSize: '10px', background: tool.level === 2 ? 'rgba(245, 158, 11, 0.2)' : tool.level === 1 ? 'rgba(59, 130, 246, 0.2)' : 'rgba(16, 185, 129, 0.2)', padding: '2px 6px', borderRadius: '4px', color: tool.level === 2 ? '#fcd34d' : tool.level === 1 ? '#93c5fd' : '#6ee7b7', fontWeight: 600 }}>
+                    Level {tool.level}
                   </span>
                 </div>
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.4 }}>{tool.desc}</p>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.4 }}>{tool.description}</p>
               </div>
             ))}
           </div>
