@@ -13,7 +13,16 @@ const workspace = process.env.APPROVED_WORKSPACE || 'C:\\JARVIS';
 const securityManager = new SecurityManager(workspace);
 const app = createServer(securityManager);
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   logger.info(`JARVIS Backend Server running at http://localhost:${port}`);
   logger.info(`Approved Workspace: ${workspace}`);
+});
+
+server.on('error', (err: any) => {
+  if (err.code === 'EADDRINUSE') {
+    logger.warn(`JARVIS Backend Server is already active on port ${port}. Continuing...`);
+  } else {
+    logger.error('Backend server error:', err);
+    process.exit(1);
+  }
 });
