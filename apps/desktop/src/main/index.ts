@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -9,6 +10,34 @@ let floatingWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isAgentRunning = true;
 let isQuitting = false;
+
+function loadRenderer(window: BrowserWindow, queryParams: string = '') {
+  const indexPath = path.join(__dirname, '../renderer/index.html');
+  const hasBuild = fs.existsSync(indexPath);
+  const devUrl = process.env.VITE_DEV_SERVER_URL;
+
+  const searchStr = queryParams ? queryParams.replace(/^\?/, '') : undefined;
+
+  if (devUrl) {
+    window.loadURL(`${devUrl}${queryParams}`).catch((err) => {
+      console.warn('Dev server URL failed to load, attempting build fallback:', err);
+      if (hasBuild) {
+        window.loadFile(indexPath, searchStr ? { search: searchStr } : undefined);
+      }
+    });
+  } else if (hasBuild && process.env.NODE_ENV !== 'development') {
+    window.loadFile(indexPath, searchStr ? { search: searchStr } : undefined);
+  } else {
+    const devServerUrl = `http://localhost:5173${queryParams}`;
+    window.loadURL(devServerUrl).catch(() => {
+      if (hasBuild) {
+        window.loadFile(indexPath, searchStr ? { search: searchStr } : undefined);
+      } else {
+        console.error('Neither dev server nor dist/renderer/index.html could be loaded.');
+      }
+    });
+  }
+}
 
 function createTrayIcon(): ReturnType<typeof nativeImage.createFromDataURL> {
   // 16x16 PNG icon cyan orb base64 data URI
@@ -138,13 +167,7 @@ function createWindow() {
     },
   });
 
-  const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
-
-  if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-  }
+  loadRenderer(mainWindow);
 
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
@@ -182,15 +205,7 @@ function createFloatingWindow() {
     },
   });
 
-  const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
-
-  if (isDev) {
-    floatingWindow.loadURL('http://localhost:5173/?mode=floating');
-  } else {
-    floatingWindow.loadFile(path.join(__dirname, '../renderer/index.html'), {
-      search: '?mode=floating',
-    });
-  }
+  loadRenderer(floatingWindow, '?mode=floating');
 
   floatingWindow.on('closed', () => {
     floatingWindow = null;

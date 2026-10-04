@@ -20,6 +20,7 @@
     "build:backend": "npm run build --workspace=@jarvis/backend",
     "build:desktop": "npm run build --workspace=@jarvis/desktop",
     "build": "npm run build:shared && npm run build:security && npm run build:ai && npm run build:voice && npm run build:tools && npm run build:agent && npm run build:backend && npm run build:desktop",
+    "start": "concurrently \"npm run start --workspace=@jarvis/backend\" \"npm run start --workspace=@jarvis/desktop\"",
     "package": "npm run package --workspace=@jarvis/desktop",
     "typecheck": "npm run build",
     "test": "vitest run"
