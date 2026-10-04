@@ -194,6 +194,11 @@ export class VoiceManager {
       const errDetail = err.message || 'Speech recognition failed';
       this.addLog('error', 'transcription failure', errDetail);
       if (this.callbacks.onError) this.callbacks.onError(errDetail);
+      setTimeout(() => {
+        if (this.state === 'ERROR') {
+          this.setState('IDLE');
+        }
+      }, 2000);
       return '';
     }
   }

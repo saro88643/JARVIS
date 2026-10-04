@@ -33,7 +33,9 @@ export class WebSpeechSTTProvider implements SpeechToTextProvider {
         (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
       if (!SpeechRecognition) {
-        reject(new Error('Speech recognition is not supported in this browser environment.'));
+        const fallback = typeof window !== 'undefined' ? prompt('Voice recognition fallback. Speak/type your command:') : null;
+        if (fallback && onPartialResult) onPartialResult(fallback);
+        resolve(fallback || '');
         return;
       }
 
@@ -70,6 +72,19 @@ export class WebSpeechSTTProvider implements SpeechToTextProvider {
           if (errorMsg === 'no-speech') {
             if (this.listeningPromiseResolve) {
               this.listeningPromiseResolve('');
+              this.listeningPromiseResolve = null;
+            }
+          } else if (
+            errorMsg === 'service-not-allowed' ||
+            errorMsg === 'not-allowed' ||
+            errorMsg === 'audio-capture' ||
+            errorMsg === 'network'
+          ) {
+            console.warn(`WebSpeech recognition error '${errorMsg}'. Prompting voice command fallback.`);
+            const fallback = typeof window !== 'undefined' ? prompt('Voice Input (Service/Media Fallback): Enter command:') : null;
+            if (fallback && onPartialResult) onPartialResult(fallback);
+            if (this.listeningPromiseResolve) {
+              this.listeningPromiseResolve(fallback || '');
               this.listeningPromiseResolve = null;
             }
           } else {

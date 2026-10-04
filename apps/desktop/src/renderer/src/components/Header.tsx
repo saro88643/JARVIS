@@ -70,7 +70,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         {/* Voice State Badge */}
         <div
-          onClick={voiceState === 'IDLE' && onStartListening ? onStartListening : undefined}
+          onClick={(voiceState === 'IDLE' || voiceState === 'ERROR') && onStartListening ? onStartListening : undefined}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -82,10 +82,10 @@ export const Header: React.FC<HeaderProps> = ({
             fontSize: '11px',
             color: badge.color,
             fontWeight: 700,
-            cursor: voiceState === 'IDLE' ? 'pointer' : 'default',
+            cursor: voiceState === 'IDLE' || voiceState === 'ERROR' ? 'pointer' : 'default',
             userSelect: 'none',
           }}
-          title={voiceState === 'IDLE' ? 'Click to Start Voice Input' : voiceState}
+          title={voiceState === 'IDLE' || voiceState === 'ERROR' ? 'Click to Start Voice Input' : voiceState}
         >
           <span>{badge.label}</span>
         </div>

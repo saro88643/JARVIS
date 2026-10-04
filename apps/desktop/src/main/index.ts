@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, session } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -214,6 +214,12 @@ function createFloatingWindow() {
 }
 
 app.whenReady().then(() => {
+  if (session.defaultSession) {
+    session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+      callback(true);
+    });
+  }
+
   setupTray();
   createWindow();
   createFloatingWindow();
